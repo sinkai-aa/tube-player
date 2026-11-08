@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tube Player</title>
+<style>
+  :root{
+    --bg:#0e0f13; --panel:#171920; --panel2:#1f222b; --line:#2a2e39;
+    --text:#eceef3; --sub:#9097a6; --accent:#ff6b4a; --accent2:#ff8e6e;
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 600px at 20% -10%,#1d1f2a 0%,var(--bg) 60%);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP","Yu Gothic UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  .app{max-width:1180px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:18px;min-height:100%}
+
+  /* header */
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:18px;letter-spacing:.02em;margin-right:6px}
+  .logo .dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#ffb36b);display:grid;place-items:center}
+  .add{flex:1;min-width:260px;display:flex;gap:8px}
+  .add input{
+    flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);color:var(--text);
+    border-radius:12px;padding:12px 14px;font-size:14px;outline:none;transition:border-color .15s;
+  }
+  .add input:focus{border-color:var(--accent)}
+  .add input::placeholder{color:#6c7383}
+  .btn-primary{
+    background:var(--accent);color:#fff;font-weight:600;border-radius:12px;padding:0 18px;font-size:14px;
+    transition:background .15s, transform .1s;white-space:nowrap;
+  }
+  .btn-primary:hover{background:var(--accent2)}
+  .btn-primary:active{transform:scale(.97)}
+
+  .notice{background:#3a2a14;border:1px solid #6b4a1e;color:#ffd9a3;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.6;display:none}
+  .notice code{background:#00000040;padding:1px 6px;border-radius:5px}
+
+  main{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;flex:1;min-height:0}
+  @media (max-width:860px){main{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+
+  /* player */
+  .player-card{padding:16px;display:flex;flex-direction:column;gap:14px}
+  .screen{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000}
+  .screen iframe,#player{position:absolute;inset:0;width:100%;height:100%;border:0}
+  .empty-screen{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--sub);font-size:14px;line-height:1.8;padding:20px;pointer-events:none}
+  .empty-screen svg{opacity:.5;margin-bottom:6px}
+
+  .meta{display:flex;align-items:center;gap:12px;min-height:46px}
+  .meta-text{flex:1;min-width:0}
+  .title{font-size:17px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .author{font-size:13px;color:var(--sub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .seek{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
+  .seek span{width:44px;text-align:center}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;flex:1;height:18px;background:transparent;cursor:pointer;margin:0;
+    --p:0%;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:5px;background:linear-gradient(to right,var(--accent) var(--p),#353a47 var(--p))}
+  input[type=range]::-moz-range-track{height:5px;border-radius:5px;background:#353a47}
+  input[type=range]::-moz-range-progress{height:5px;border-radius:5px;background:var(--accent)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;margin-top:-4.5px;box-shadow:0 1px 4px #0008;transition:transform .1s}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border:0;border-radius:50%;background:#fff}
+  input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.15)}
+
+  .controls{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .main-ctrl{display:flex;align-items:center;gap:6px;margin:0 auto}
+  .icon-btn{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;color:#c9cdd6;transition:background .15s,color .15s;position:relative}
+  .icon-btn:hover{background:var(--panel2);color:#fff}
+  .icon-btn.on{color:var(--accent)}
+  .icon-btn .badge{position:absolute;bottom:6px;right:6px;font-size:9px;font-weight:800;color:var(--accent)}
+  .play-btn{width:58px;height:58px;border-radius:50%;background:#fff;color:#111;display:grid;place-items:center;transition:transform .1s,background .15s;margin:0 6px}
+  .play-btn:hover{background:#f1f1f1}
+  .play-btn:active{transform:scale(.94)}
+  .side-ctrl{display:flex;align-items:center;gap:4px}
+  .vol{display:flex;align-items:center;gap:4px;width:150px}
+  .speed{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:5px 6px;font-size:12px;outline:none;cursor:pointer}
+
+  /* queue */
+  .queue-card{display:flex;flex-direction:column;min-height:420px;max-height:calc(100vh - 140px)}
+  @media (max-width:860px){.queue-card{max-height:none}}
+  .queue-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .queue-head h2{margin:0;font-size:15px;font-weight:650}
+  .queue-head .count{color:var(--sub);font-weight:400;font-size:13px;margin-left:6px}
+  .text-btn{font-size:12px;color:var(--sub);padding:6px 10px;border-radius:8px}
+  .text-btn:hover{background:var(--panel2);color:#fff}
+  .queue{list-style:none;margin:0;padding:6px;overflow-y:auto;flex:1}
+  .queue::-webkit-scrollbar{width:8px}
+  .queue::-webkit-scrollbar-thumb{background:#2c303b;border-radius:8px}
+  .item{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;cursor:pointer;transition:background .12s;user-select:none}
+  .item:hover{background:var(--panel2)}
+  .item.current{background:#2a1f1d}
+  .item.dragging{opacity:.4}
+  .item.drop-before{box-shadow:inset 0 2px 0 var(--accent)}
+  .item.drop-after{box-shadow:inset 0 -2px 0 var(--accent)}
+  .num{width:20px;text-align:center;font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums;flex-shrink:0}
+  .item.current .num{color:var(--accent)}
+  .thumb{width:64px;height:36px;border-radius:6px;object-fit:cover;background:#222;flex-shrink:0}
+  .item-text{flex:1;min-width:0}
+  .item-title{font-size:13px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item.current .item-title{color:var(--accent2)}
+  .item-author{font-size:11.5px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .del{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:#7a8191;opacity:0;transition:opacity .12s,background .12s}
+  .item:hover .del{opacity:1}
+  @media (hover:none){.del{opacity:1}}
+  .del:hover{background:#3a2626;color:#ff8a8a}
+  .eq{display:inline-flex;gap:2px;align-items:flex-end;height:12px}
+  .eq i{width:3px;background:var(--accent);border-radius:1px;animation:eq 1s infinite ease-in-out}
+  .eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
+  .eq.paused i{animation-play-state:paused}
+  @keyframes eq{0%,100%{height:3px}50%{height:12px}}
+  .queue-empty{color:var(--sub);text-align:center;padding:50px 20px;font-size:13px;line-height:1.9}
+
+  .hint{color:#6c7383;font-size:11.5px;text-align:center;padding:10px;border-top:1px solid var(--line)}
+  kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 5px;font-family:inherit;font-size:10.5px}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#2a2e39;color:#fff;padding:11px 18px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:all .25s;box-shadow:0 8px 30px #0008;z-index:10;max-width:90vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #helper{position:fixed;left:-9999px;top:0;width:200px;height:200px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo"><div class="dot"><svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>Tube Player</div>
+    <form class="add" id="addForm">
+      <input id="urlInput" type="text" autocomplete="off" placeholder="YouTubeのURL（動画・プレイリスト）を貼り付け — 複数はスペース区切り">
+      <button class="btn-primary" type="submit">追加</button>
+    </form>
+  </header>
+
+  <div class="notice" id="fileNotice">
+    ⚠ ファイルを直接開いた状態（file://）では、YouTube側の制限で動画が再生できないことがあります（エラー153）。
+    このファイルのあるフォルダで <code>python3 -m http.server 8000</code> を実行し、ブラウザで
+    <code>http://localhost:8000/youtube-music-player.html</code> を開いてください。
+  </div>
+
+  <main>
+    <section class="card player-card">
+      <div class="screen">
+        <div id="player"></div>
+        <div class="empty-screen" id="emptyScreen">
+          <div>
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <div>上の入力欄にYouTubeのURLを貼り付けて<br>キューに曲を追加しましょう</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="meta">
+        <div class="meta-text">
+          <div class="title" id="nowTitle">再生していません</div>
+          <div class="author" id="nowAuthor">—</div>
+        </div>
+      </div>
+
+      <div class="seek">
+        <span id="curTime">0:00</span>
+        <input type="range" id="seekBar" min="0" max="1000" value="0" aria-label="再生位置">
+        <span id="durTime">0:00</span>
+      </div>
+
+      <div class="controls">
+        <div class="side-ctrl">
+          <button class="icon-btn" id="shuffleBtn" title="シャッフル (S)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
+          </button>
+        </div>
+        <div class="main-ctrl">
+          <button class="icon-btn" id="prevBtn" title="前へ (P)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+          </button>
+          <button class="play-btn" id="playBtn" title="再生 / 一時停止 (Space)">
+            <svg id="playIcon" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="icon-btn" id="nextBtn" title="次へ (N)">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
+          </button>
+        </div>
+        <div class="side-ctrl">
+          <button class="icon-btn" id="repeatBtn" title="リピート (R)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+            <span class="badge" id="repeatBadge"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="vol">
+          <button class="icon-btn" id="muteBtn" title="ミュート (M)">
+            <svg id="volIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+          </button>
+          <input type="range" id="volBar" min="0" max="100" value="80" aria-label="音量">
+        </div>
+        <select class="speed" id="speedSel" title="再生速度">
+          <option value="0.5">0.5x</option><option value="0.75">0.75x</option>
+          <option value="1" selected>1.0x</option><option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option><option value="2">2.0x</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="card queue-card">
+      <div class="queue-head">
+        <h2>再生キュー<span class="count" id="queueCount"></span></h2>
+        <div>
+          <button class="text-btn" id="shuffleQueueBtn" title="キューの並びを混ぜる">並べ替え</button>
+          <button class="text-btn" id="clearBtn">すべて削除</button>
+        </div>
+      </div>
+      <ul class="queue" id="queue"></ul>
+      <div class="hint">
+        <kbd>Space</kbd> 再生/停止　<kbd>←</kbd><kbd>→</kbd> 5秒移動　<kbd>N</kbd>/<kbd>P</kbd> 次/前　<kbd>↑</kbd><kbd>↓</kbd> 音量
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="helper"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  // ---------- state ----------
+  const STORE = 'tubeplayer.v1';
+  const state = {
+    queue: [],           // {id, title, author}
+    index: -1,
+    shuffle: false,
+    repeat: 'off',       // off | all | one
+    volume: 80,
+    muted: false,
+    speed: 1,
+    lastTime: 0
+  };
+  let player = null, ready = false, playing = false, dragging = false;
+  let shufflePlayed = new Set(), history = [];
+
+  const $ = id => document.getElementById(id);
+  const els = {
+    form: $('addForm'), input: $('urlInput'), queue: $('queue'), count: $('queueCount'),
+    title: $('nowTitle'), author: $('nowAuthor'), cur: $('curTime'), dur: $('durTime'),
+    seek: $('seekBar'), play: $('playBtn'), playIcon: $('playIcon'), prev: $('prevBtn'), next: $('nextBtn'),
+    shuffle: $('shuffleBtn'), repeat: $('repeatBtn'), repeatBadge: $('repeatBadge'),
+    mute: $('muteBtn'), volIcon: $('volIcon'), vol: $('volBar'), speed: $('speedSel'),
+    clear: $('clearBtn'), mix: $('shuffleQueueBtn'), empty: $('emptyScreen'), toast: $('toast')
+  };
+
+  if (location.protocol === 'file:') $('fileNotice').style.display = 'block';
+
+  // ---------- storage ----------
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE) || 'null');
+      if (s && Array.isArray(s.queue)) Object.assign(state, s);
+    } catch (e) {}
+    if (state.index >= state.queue.length) state.index = state.queue.length - 1;
+  }
+
+  // ---------- utils ----------
+  const fmt = s => {
+    s = Math.max(0, Math.floor(s || 0));
+    const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(sec).padStart(2, '0');
+  };
+  const thumb = id => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let toastTimer;
+  function toast(msg) {
+    els.toast.textContent = msg;
+    els.toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2400);
+  }
+  function setRangeFill(r) {
+    const p = (r.value - r.min) / (r.max - r.min) * 100;
+    r.style.setProperty('--p', p + '%');
+  }
+
+  // ---------- parse input ----------
+  function parseToken(t) {
+    t = t.trim();
+    if (!t) return null;
+    if (/^[\w-]{11}$/.test(t)) return { video: t };
+    let url;
+    try { url = new URL(t.startsWith('http') ? t : 'https://' + t); } catch (e) { return null; }
+    const list = url.searchParams.get('list');
+    let video = url.searchParams.get('v');
+    if (!video) {
+      const m = url.pathname.match(/(?:^\/|\/(?:shorts|embed|live|v)\/)([\w-]{11})(?:$|[/?])/);
+      if (m && (url.hostname.includes('youtu.be') || /\/(shorts|embed|live|v)\//.test(url.pathname))) video = m[1];
+    }
+    if (list && !list.startsWith('RD')) return { list, video };
+    if (video && /^[\w-]{11}$/.test(video)) return { video };
+    return null;
+  }
+
+  async function handleInput(text) {
+    const tokens = text.split(/\s+/).filter(Boolean);
+    let added = 0, bad = 0;
+    const wasEmpty = state.queue.length === 0;
+    for (const tok of tokens) {
+      const r = parseToken(tok);
+      if (!r) { bad++; continue; }
+      if (r.list) {
+        toast('プレイリストを読み込み中…');
+        const ids = await fetchPlaylistIds(r.list).catch(() => []);
+        if (ids.length) { ids.forEach(id => addVideo(id)); added += ids.length; }
+        else if (r.video) { addVideo(r.video); added++; }
+        else bad++;
+      } else {
+        addVideo(r.video); added++;
+      }
+    }
+    render(); save();
+    if (added) toast(`${added}曲を追加しました` + (bad ? `（${bad}件は認識できませんでした）` : ''));
+    else toast('YouTubeのURLを認識できませんでした');
+    if (wasEmpty && state.queue.length) playIndex(0);
+  }
+
+  function addVideo(id) {
+    const item = { id, title: '読み込み中…', author: '' };
+    state.queue.push(item);
+    fetchMeta(item);
+  }
+
+  async function fetchMeta(item) {
+    const watch = encodeURIComponent('https://www.youtube.com/watch?v=' + item.id);
+    const sources = [
+      `https://www.youtube.com/oembed?url=${watch}&format=json`,
+      `https://noembed.com/embed?url=${watch}`
+    ];
+    for (const src of sources) {
+      try {
+        const res = await fetch(src);
+        if (!res.ok) continue;
+        const d = await res.json();
+        if (d && d.title) {
+          item.title = d.title; item.author = d.author_name || '';
+          render(); save(); updateNow(); return;
+        }
+      } catch (e) {}
+    }
+    if (item.title === '読み込み中…') { item.title = 'YouTube動画 (' + item.id + ')'; render(); save(); }
+  }
+
+  // load a playlist's video IDs through a hidden helper player
+  function fetchPlaylistIds(listId) {
+    return new Promise((resolve, reject) => {
+      if (!window.YT || !YT.Player) return reject();
+      const holder = document.createElement('div');
+      $('helper').appendChild(holder);
+      let done = false, tries = 0, h;
+      const finish = ids => {
+        if (done) return; done = true;
+        try { h.destroy(); } catch (e) {}
+        $('helper').innerHTML = '';
+        resolve(ids || []);
+      };
+      h = new YT.Player(holder, {
+        width: 200, height: 200,
+        playerVars: { listType: 'playlist', list: listId, autoplay: 0 },
+        events: {
+          onReady: () => {
+            const poll = setInterval(() => {
+              tries++;
+              let ids = [];
+              try { ids = h.getPlaylist() || []; } catch (e) {}
+              if (ids.length || tries > 40) { clearInterval(poll); finish(ids); }
+            }, 250);
+          },
+          onError: () => finish([])
+        }
+      });
+      setTimeout(() => finish([]), 15000);
+    });
+  }
+
+  // ---------- player ----------
+  window.onYouTubeIframeAPIReady = () => {
+    const cur = state.queue[state.index];
+    player = new YT.Player('player', {
+      width: '100%', height: '100%',
+      videoId: cur ? cur.id : undefined,
+      playerVars: {
+        playsinline: 1, rel: 0, modestbranding: 1,
+        start: cur ? Math.floor(state.lastTime || 0) : 0
+      },
+      events: { onReady, onStateChange, onError }
+    });
+  };
+
+  function onReady() {
+    ready = true;
+    player.setVolume(state.volume);
+    state.muted ? player.mute() : player.unMute();
+    try { player.setPlaybackRate(state.speed); } catch (e) {}
+    updateNow();
+    setInterval(tick, 250);
+  }
+
+  function onStateChange(e) {
+    const S = YT.PlayerState;
+    if (e.data === S.PLAYING) {
+      playing = true;
+      try { player.setPlaybackRate(state.speed); } catch (er) {}
+      const d = player.getVideoData && player.getVideoData();
+      const item = state.queue[state.index];
+      if (item && d && d.title && d.video_id === item.id && (item.title === '読み込み中…' || item.title.startsWith('YouTube動画'))) {
+        item.title = d.title; item.author = d.author || item.author; render(); save();
+      }
+    } else if (e.data === S.PAUSED || e.data === S.CUED) {
+      playing = false;
+    } else if (e.data === S.ENDED) {
+      playing = false;
+      onEnded();
+    }
+    updatePlayIcon(); renderPlayingMarker(); updateMediaSession();
+  }
+
+  function onError(e) {
+    const msgs = { 2: 'URLが正しくありません', 5: 'この動画は再生できません', 100: '動画が見つかりません（削除・非公開）', 101: 'この動画は埋め込み再生が許可されていません', 150: 'この動画は埋め込み再生が許可されていません', 153: 'ローカルサーバー経由で開いてください（エラー153）' };
+    toast((msgs[e.data] || 'エラーが発生しました') + ' — 次の曲へ');
+    if (state.queue.length > 1) setTimeout(() => next(true), 1200);
+  }
+
+  function onEnded() {
+    if (state.repeat === 'one') { player.seekTo(0, true); player.playVideo(); return; }
+    next(true);
+  }
+
+  function playIndex(i, { autoplay = true, push = true } = {}) {
+    if (i < 0 || i >= state.queue.length) return;
+    if (push && state.index >= 0 && state.index !== i) history.push(state.index);
+    if (history.length > 200) history.shift();
+    state.index = i;
+    state.lastTime = 0;
+    shufflePlayed.add(state.queue[i].id);
+    if (ready) {
+      autoplay ? player.loadVideoById(state.queue[i].id) : player.cueVideoById(state.queue[i].id);
+    }
+    render(); updateNow(); save();
+  }
+
+  function next(auto = false) {
+    const n = state.queue.length;
+    if (!n) return;
+    if (state.shuffle && n > 1) {
+      let pool = state.queue.map((_, i) => i).filter(i => i !== state.index && !shufflePlayed.has(state.queue[i].id));
+      if (!pool.length) {
+        if (auto && state.repeat === 'off') { stopAtEnd(); return; }
+        shufflePlayed = new Set([state.queue[state.index]?.id]);
+        pool = state.queue.map((_, i) => i).filter(i => i !== state.index);
+      }
+      playIndex(pool[Math.floor(Math.random() * pool.length)]);
+      return;
+    }
+    let i = state.index + 1;
+    if (i >= n) {
+      if (state.repeat === 'all' || !auto) i = 0;
+      else { stopAtEnd(); return; }
+    }
+    playIndex(i);
+  }
+
+  function prev() {
+    if (!state.queue.length) return;
+    if (ready && player.getCurrentTime && player.getCurrentTime() > 3) { player.seekTo(0, true); return; }
+    if (state.shuffle && history.length) { playIndex(history.pop(), { push: false }); return; }
+    let i = state.index - 1;
+    if (i < 0) i = state.repeat === 'all' ? state.queue.length - 1 : 0;
+    playIndex(i, { push: false });
+  }
+
+  function stopAtEnd() {
+    toast('キューの最後まで再生しました');
+    shufflePlayed.clear();
+  }
+
+  function togglePlay() {
+    if (!ready) return;
+    if (state.index < 0) { if (state.queue.length) playIndex(0); return; }
+    playing ? player.pauseVideo() : player.playVideo();
+  }
+
+  function tick() {
+    if (!ready || !player.getDuration) return;
+    const d = player.getDuration() || 0, c = player.getCurrentTime() || 0;
+    els.dur.textContent = fmt(d);
+    if (!dragging) {
+      els.cur.textContent = fmt(c);
+      els.seek.value = d ? Math.round(c / d * 1000) : 0;
+      setRangeFill(els.seek);
+    }
+    if (state.index >= 0 && Math.abs(c - state.lastTime) > 2) { state.lastTime = c; save(); }
+  }
+
+  // ---------- UI ----------
+  function updateNow() {
+    const item = state.queue[state.index];
+    els.empty.style.display = item ? 'none' : 'grid';
+    els.title.textContent = item ? item.title : '再生していません';
+    els.author.textContent = item ? (item.author || 'YouTube') : '—';
+    document.title = item ? `${item.title} — Tube Player` : 'Tube Player';
+    updateMediaSession();
+  }
+
+  function updatePlayIcon() {
+    els.playIcon.innerHTML = playing
+      ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>'
+      : '<path d="M8 5v14l11-7z"/>';
+  }
+
+  function updateModes() {
+    els.shuffle.classList.toggle('on', state.shuffle);
+    els.repeat.classList.toggle('on', state.repeat !== 'off');
+    els.repeatBadge.textContent = state.repeat === 'one' ? '1' : '';
+    els.repeat.title = { off: 'リピート：オフ (R)', all: 'リピート：全曲 (R)', one: 'リピート：1曲 (R)' }[state.repeat];
+  }
+
+  function updateVolume() {
+    els.vol.value = state.muted ? 0 : state.volume;
+    setRangeFill(els.vol);
+    const v = state.muted ? 0 : state.volume;
+    const base = '<path d="M11 5 6 9H2v6h4l5 4z" fill="currentColor"/>';
+    els.volIcon.innerHTML = base + (v === 0
+      ? '<line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/>'
+      : v < 50 ? '<path d="M15.5 8.5a5 5 0 0 1 0 7"/>'
+      : '<path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>');
+    if (ready) { player.setVolume(state.volume); state.muted ? player.mute() : player.unMute(); }
+  }
+
+  function render() {
+    const q = state.queue;
+    els.count.textContent = q.length ? `${q.length}曲` : '';
+    if (!q.length) {
+      els.queue.innerHTML = '<li class="queue-empty">キューは空です<br>動画やプレイリストのURLを追加してください</li>';
+      return;
+    }
+    els.queue.innerHTML = q.map((it, i) => `
+      <li class="item${i === state.index ? ' current' : ''}" draggable="true" data-i="${i}">
+        <div class="num">${i === state.index ? `<span class="eq${playing ? '' : ' paused'}"><i></i><i></i><i></i></span>` : i + 1}</div>
+        <img class="thumb" src="${thumb(it.id)}" alt="" loading="lazy">
+        <div class="item-text">
+          <div class="item-title">${esc(it.title)}</div>
+          <div class="item-author">${esc(it.author || '')}</div>
+        </div>
+        <button class="del" data-del="${i}" title="削除">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </li>`).join('');
+    const cur = els.queue.querySelector('.current');
+    if (cur) cur.scrollIntoView({ block: 'nearest' });
+  }
+
+  function renderPlayingMarker() {
+    const eq = els.queue.querySelector('.current .eq');
+    if (eq) eq.classList.toggle('paused', !playing);
+  }
+
+  function removeAt(i) {
+    const wasCurrent = i === state.index;
+    state.queue.splice(i, 1);
+    history = history.filter(h => h !== i).map(h => h > i ? h - 1 : h);
+    if (i < state.index) state.index--;
+    else if (wasCurrent) {
+      if (!state.queue.length) {
+        state.index = -1;
+        if (ready) player.stopVideo();
+        playing = false; updatePlayIcon();
+      } else {
+        const ni = Math.min(i, state.queue.length - 1);
+        state.index = -1;
+        playIndex(ni, { autoplay: playing, push: false });
+        return;
+      }
+    }
+    render(); updateNow(); save();
+  }
+
+  function moveItem(from, to) {
+    if (from === to) return;
+    const [it] = state.queue.splice(from, 1);
+    state.queue.splice(to, 0, it);
+    if (state.index === from) state.index = to;
+    else if (from < state.index && to >= state.index) state.index--;
+    else if (from > state.index && to <= state.index) state.index++;
+    history = [];
+    render(); save();
+  }
+
+  // ---------- media session (OS media keys) ----------
+  function updateMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    const item = state.queue[state.index];
+    try {
+      navigator.mediaSession.metadata = item ? new MediaMetadata({
+        title: item.title, artist: item.author || 'YouTube',
+        artwork: [{ src: `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`, sizes: '480x360', type: 'image/jpeg' }]
+      }) : null;
+      navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+    } catch (e) {}
+  }
+  if ('mediaSession' in navigator) {
+    const set = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch (e) {} };
+    set('play', () => ready && player.playVideo());
+    set('pause', () => ready && player.pauseVideo());
+    set('nexttrack', () => next());
+    set('previoustrack', () => prev());
+  }
+
+  // ---------- events ----------
+  els.form.addEventListener('submit', e => {
+    e.preventDefault();
+    const v = els.input.value.trim();
+    if (!v) return;
+    els.input.value = '';
+    handleInput(v);
+  });
+  els.input.addEventListener('paste', () => {
+    setTimeout(() => { const v = els.input.value.trim(); if (v && /youtu|^[\w-]{11}$/.test(v)) { els.input.value = ''; handleInput(v); } }, 0);
+  });
+
+  els.play.addEventListener('click', togglePlay);
+  els.next.addEventListener('click', () => next());
+  els.prev.addEventListener('click', prev);
+  els.shuffle.addEventListener('click', () => {
+    state.shuffle = !state.shuffle;
+    shufflePlayed = new Set(state.index >= 0 ? [state.queue[state.index].id] : []);
+    updateModes(); save();
+    toast(state.shuffle ? 'シャッフル：オン' : 'シャッフル：オフ');
+  });
+  els.repeat.addEventListener('click', () => {
+    state.repeat = { off: 'all', all: 'one', one: 'off' }[state.repeat];
+    updateModes(); save();
+    toast({ off: 'リピート：オフ', all: 'リピート：全曲', one: 'リピート：1曲' }[state.repeat]);
+  });
+
+  els.seek.addEventListener('input', () => {
+    dragging = true;
+    setRangeFill(els.seek);
+    if (ready) els.cur.textContent = fmt(els.seek.value / 1000 * (player.getDuration() || 0));
+  });
+  els.seek.addEventListener('change', () => {
+    if (ready) player.seekTo(els.seek.value / 1000 * (player.getDuration() || 0), true);
+    dragging = false;
+  });
+
+  els.vol.addEventListener('input', () => {
+    state.volume = +els.vol.value;
+    state.muted = state.volume === 0;
+    updateVolume(); save();
+  });
+  els.mute.addEventListener('click', () => {
+    if (state.muted && state.volume === 0) state.volume = 50;
+    state.muted = !state.muted;
+    updateVolume(); save();
+  });
+  els.speed.addEventListener('change', () => {
+    state.speed = +els.speed.value;
+    if (ready) try { player.setPlaybackRate(state.speed); } catch (e) {}
+    save();
+  });
+
+  els.clear.addEventListener('click', () => {
+    if (!state.queue.length) return;
+    if (els.clear.dataset.confirm !== '1') {
+      els.clear.dataset.confirm = '1';
+      els.clear.textContent = 'もう一度押して削除';
+      els.clear.style.color = '#ff8a8a';
+      setTimeout(() => { els.clear.dataset.confirm = ''; els.clear.textContent = 'すべて削除'; els.clear.style.color = ''; }, 2500);
+      return;
+    }
+    els.clear.dataset.confirm = ''; els.clear.textContent = 'すべて削除'; els.clear.style.color = '';
+    state.queue = []; state.index = -1; history = []; shufflePlayed.clear();
+    if (ready) player.stopVideo();
+    playing = false; updatePlayIcon(); render(); updateNow(); save();
+  });
+
+  els.mix.addEventListener('click', () => {
+    if (state.queue.length < 2) return;
+    const cur = state.queue[state.index];
+    const rest = state.queue.filter((_, i) => i !== state.index);
+    for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+    state.queue = cur ? [cur, ...rest] : rest;
+    if (cur) state.index = 0;
+    history = [];
+    render(); save(); toast('キューを並べ替えました');
+  });
+
+  els.queue.addEventListener('click', e => {
+    const del = e.target.closest('[data-del]');
+    if (del) { e.stopPropagation(); removeAt(+del.dataset.del); return; }
+    const li = e.target.closest('.item');
+    if (!li) return;
+    const i = +li.dataset.i;
+    if (i === state.index) togglePlay(); else playIndex(i);
+  });
+
+  // drag & drop reorder
+  let dragFrom = null;
+  els.queue.addEventListener('dragstart', e => {
+    const li = e.target.closest('.item'); if (!li) return;
+    dragFrom = +li.dataset.i; li.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', String(dragFrom)); } catch (er) {}
+  });
+  els.queue.addEventListener('dragover', e => {
+    const li = e.target.closest('.item'); if (!li || dragFrom === null) return;
+    e.preventDefault();
+    els.queue.querySelectorAll('.drop-before,.drop-after').forEach(x => x.classList.remove('drop-before', 'drop-after'));
+    const r = li.getBoundingClientRect();
+    li.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-before' : 'drop-after');
+  });
+  els.queue.addEventListener('drop', e => {
+    const li = e.target.closest('.item'); if (!li || dragFrom === null) return;
+    e.preventDefault();
+    const r = li.getBoundingClientRect();
+    let to = +li.dataset.i + (e.clientY < r.top + r.height / 2 ? 0 : 1);
+    if (dragFrom < to) to--;
+    const from = dragFrom; dragFrom = null;
+    moveItem(from, to);
+  });
+  els.queue.addEventListener('dragend', () => {
+    dragFrom = null;
+    els.queue.querySelectorAll('.dragging,.drop-before,.drop-after').forEach(x => x.classList.remove('dragging', 'drop-before', 'drop-after'));
+  });
+
+  // keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input[type=text], textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    if (k === ' ' || k === 'k' || k === 'K') { e.preventDefault(); togglePlay(); }
+    else if (k === 'ArrowRight' && ready) { e.preventDefault(); player.seekTo(player.getCurrentTime() + 5, true); }
+    else if (k === 'ArrowLeft' && ready) { e.preventDefault(); player.seekTo(Math.max(0, player.getCurrentTime() - 5), true); }
+    else if (k === 'ArrowUp') { e.preventDefault(); state.muted = false; state.volume = Math.min(100, state.volume + 5); updateVolume(); save(); }
+    else if (k === 'ArrowDown') { e.preventDefault(); state.volume = Math.max(0, state.volume - 5); state.muted = state.volume === 0; updateVolume(); save(); }
+    else if (k === 'n' || k === 'N') next();
+    else if (k === 'p' || k === 'P') prev();
+    else if (k === 's' || k === 'S') els.shuffle.click();
+    else if (k === 'r' || k === 'R') els.repeat.click();
+    else if (k === 'm' || k === 'M') els.mute.click();
+  });
+
+  // ---------- init ----------
+  load();
+  els.speed.value = String(state.speed);
+  if (!els.speed.value) els.speed.value = '1';
+  render(); updateNow(); updateModes(); updateVolume(); updatePlayIcon(); setRangeFill(els.seek);
+  // refresh missing titles from earlier sessions
+  state.queue.forEach(it => { if (!it.title || it.title === '読み込み中…') fetchMeta(it); });
+
+  const tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  tag.onerror = () => toast('YouTubeプレーヤーを読み込めませんでした。ネット接続を確認してください');
+  document.head.appendChild(tag);
+})();
+</script>
+</body>
+</html>
