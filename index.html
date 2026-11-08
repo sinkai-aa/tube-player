@@ -244,6 +244,7 @@
     lastTime: 0
   };
   let player = null, ready = false, playing = false, dragging = false;
+  let wantPlay = false, statusMsg = '', playCheckTimer = null;
   let shufflePlayed = new Set(), history = [];
 
   const $ = id => document.getElementById(id);
@@ -405,17 +406,37 @@
 
   function onReady() {
     ready = true;
+    statusMsg = '';
     player.setVolume(state.volume);
     state.muted ? player.mute() : player.unMute();
     try { player.setPlaybackRate(state.speed); } catch (e) {}
+    // 準備完了前に追加・選択された曲をここで読み込む
+    const cur = state.queue[state.index];
+    if (cur && loadedId() !== cur.id) {
+      wantPlay ? player.loadVideoById(cur.id) : player.cueVideoById(cur.id);
+    } else if (cur && wantPlay) {
+      player.playVideo();
+    }
+    wantPlay = false;
     updateNow();
     setInterval(tick, 250);
+  }
+
+  function loadedId() {
+    try { const d = player.getVideoData(); return d && d.video_id; } catch (e) { return null; }
+  }
+
+  function setStatus(msg) {
+    statusMsg = msg || '';
+    updateNow();
   }
 
   function onStateChange(e) {
     const S = YT.PlayerState;
     if (e.data === S.PLAYING) {
       playing = true;
+      clearTimeout(playCheckTimer);
+      if (statusMsg) setStatus('');
       try { player.setPlaybackRate(state.speed); } catch (er) {}
       const d = player.getVideoData && player.getVideoData();
       const item = state.queue[state.index];
@@ -433,8 +454,10 @@
 
   function onError(e) {
     const msgs = { 2: 'URLが正しくありません', 5: 'この動画は再生できません', 100: '動画が見つかりません（削除・非公開）', 101: 'この動画は埋め込み再生が許可されていません', 150: 'この動画は埋め込み再生が許可されていません', 153: 'ローカルサーバー経由で開いてください（エラー153）' };
-    toast((msgs[e.data] || 'エラーが発生しました') + ' — 次の曲へ');
-    if (state.queue.length > 1) setTimeout(() => next(true), 1200);
+    const m = (msgs[e.data] || 'エラーが発生しました') + `（コード ${e.data}）`;
+    setStatus(m);
+    if (state.queue.length > 1) { toast(m + ' — 次の曲へ'); setTimeout(() => next(true), 1500); }
+    else toast(m);
   }
 
   function onEnded() {
@@ -449,8 +472,11 @@
     state.index = i;
     state.lastTime = 0;
     shufflePlayed.add(state.queue[i].id);
+    statusMsg = '';
     if (ready) {
       autoplay ? player.loadVideoById(state.queue[i].id) : player.cueVideoById(state.queue[i].id);
+    } else {
+      wantPlay = autoplay; // onReady で読み込む
     }
     render(); updateNow(); save();
   }
@@ -491,9 +517,27 @@
   }
 
   function togglePlay() {
-    if (!ready) return;
-    if (state.index < 0) { if (state.queue.length) playIndex(0); return; }
-    playing ? player.pauseVideo() : player.playVideo();
+    if (!state.queue.length) { toast('先にURLを追加してください'); return; }
+    if (state.index < 0) state.index = 0;
+    if (!ready) {
+      wantPlay = true;
+      toast('プレーヤーを準備中です。準備ができたら再生します');
+      render(); updateNow();
+      return;
+    }
+    if (playing) { player.pauseVideo(); return; }
+    const cur = state.queue[state.index];
+    setStatus('');
+    if (loadedId() !== cur.id) player.loadVideoById(cur.id);
+    else player.playVideo();
+    // ブラウザが自動再生を止めた場合のヒント
+    clearTimeout(playCheckTimer);
+    playCheckTimer = setTimeout(() => {
+      let s; try { s = player.getPlayerState(); } catch (e) {}
+      if (!statusMsg && s !== YT.PlayerState.PLAYING && s !== YT.PlayerState.BUFFERING) {
+        setStatus('再生が始まらない場合は、動画の画面を直接タップ／クリックしてください');
+      }
+    }, 2500);
   }
 
   function tick() {
@@ -513,7 +557,9 @@
     const item = state.queue[state.index];
     els.empty.style.display = item ? 'none' : 'grid';
     els.title.textContent = item ? item.title : '再生していません';
-    els.author.textContent = item ? (item.author || 'YouTube') : '—';
+    els.author.textContent = statusMsg ? '⚠ ' + statusMsg : (item ? (item.author || 'YouTube') : '—');
+    els.author.style.color = statusMsg ? '#ffb38a' : '';
+    els.author.style.whiteSpace = statusMsg ? 'normal' : '';
     document.title = item ? `${item.title} — Tube Player` : 'Tube Player';
     updateMediaSession();
   }
@@ -765,8 +811,10 @@
 
   const tag = document.createElement('script');
   tag.src = 'https://www.youtube.com/iframe_api';
-  tag.onerror = () => toast('YouTubeプレーヤーを読み込めませんでした。ネット接続を確認してください');
+  const apiFail = 'YouTubeプレーヤーを読み込めませんでした。ネット接続や広告ブロッカーを確認してください';
+  tag.onerror = () => setStatus(apiFail);
   document.head.appendChild(tag);
+  setTimeout(() => { if (!ready) setStatus(apiFail); }, 10000);
 })();
 </script>
 </body>
